@@ -1,11 +1,12 @@
 import { headers } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { getDeveloperById, createDeveloper } from '@/lib/db/developers'
+import { getDeveloperById } from '@/lib/db/developers'
+import { createDeveloper } from '@/lib/db/developers'
 import { seedSignupCredits } from '@/lib/db/credits'
 
-// Called once after signup to provision developer row + API key + 500 credits.
-// Idempotent: if developer row already exists, returns existing state.
+// Called on every dashboard load to ensure developer record exists
+// Idempotent — safe to call multiple times
 export async function POST() {
   try {
     const session = await auth.api.getSession({ headers: await headers() })
@@ -26,7 +27,7 @@ export async function POST() {
     const { developer, rawApiKey } = await createDeveloper({
       id: userId,
       email,
-      passwordHash: '', // Better Auth owns the password — this field is a remnant
+      passwordHash: '',
     })
 
     // Seed 500 signup credits
