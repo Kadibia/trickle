@@ -27,7 +27,7 @@ async function Navbar() {
               href="/dashboard"
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-500"
             >
-              Dashboard →
+              Dashboard
             </Link>
           ) : (
             <>

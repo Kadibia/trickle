@@ -9,7 +9,7 @@ const jakarta = Plus_Jakarta_Sans({
 })
 
 export const metadata: Metadata = {
-  title: 'Trickle — Registration Queue API',
+  title: 'Trickle: Registration Queue API',
   description: 'Stop your site from crashing during signups. Trickle queues registration surges and delivers them safely to your server.',
 }
 
