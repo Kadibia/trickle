@@ -62,6 +62,7 @@ export const developers = pgTable('developers', {
   passwordHash: text('password_hash').notNull().default(''),
   apiKeyHash: text('api_key_hash').unique(),
   webhookUrl: text('webhook_url'),
+  webhookSecret: text('webhook_secret'),
   dripRate: integer('drip_rate').default(10).notNull(),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })

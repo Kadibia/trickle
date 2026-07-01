@@ -1,16 +1,18 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { ShieldCheck } from 'lucide-react'
 import { ApiKeyCard } from '@/components/api-keys/api-key-card'
 
 interface KeyState {
   hasKey: boolean
   maskedKey: string | null
-  rawKey: string | null   // only set immediately after generate/regen
+  rawKey: string | null
 }
 
 export default function ApiKeysPage() {
+  const searchParams = useSearchParams()
   const [keyState, setKeyState] = useState<KeyState>({
     hasKey: false,
     maskedKey: null,
@@ -31,25 +33,30 @@ export default function ApiKeysPage() {
         }))
       }
     } catch {
-      // silently fail — DB not connected locally
+      // silently fail
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchKey()
-  }, [fetchKey])
+    // Check if a new key was passed via URL (from signup)
+    const newKey = searchParams.get('newKey')
+    if (newKey) {
+      setKeyState({ hasKey: true, maskedKey: null, rawKey: newKey })
+      setLoading(false)
+      // Clean up URL without triggering a reload
+      window.history.replaceState({}, '', '/dashboard/api-keys')
+    } else {
+      fetchKey()
+    }
+  }, [fetchKey, searchParams])
 
   async function handleRegenerate() {
     const res = await fetch('/api/internal/api-keys', { method: 'POST' })
     const json = await res.json()
     if (json.success) {
-      setKeyState({
-        hasKey: true,
-        maskedKey: null,
-        rawKey: json.data.rawApiKey,
-      })
+      setKeyState({ hasKey: true, maskedKey: null, rawKey: json.data.rawApiKey })
     }
   }
 
@@ -69,9 +76,8 @@ export default function ApiKeysPage() {
   }
 
   function dismissBanner() {
-    // Clear rawKey — it will never be shown again
     setKeyState((prev) => ({ ...prev, rawKey: null }))
-    fetchKey() // reload masked key
+    fetchKey()
   }
 
   return (
@@ -100,16 +106,12 @@ export default function ApiKeysPage() {
             {keyState.rawKey}
           </div>
           <div className="mt-3 flex gap-2">
-            <button
-              onClick={handleBannerCopy}
-              className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-600"
-            >
+            <button onClick={handleBannerCopy}
+              className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-medium text-white transition hover:bg-amber-600">
               {bannerCopied ? '✓ Copied!' : 'Copy Key'}
             </button>
-            <button
-              onClick={dismissBanner}
-              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400 transition hover:text-white"
-            >
+            <button onClick={dismissBanner}
+              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm text-zinc-400 transition hover:text-white">
               I&apos;ve saved it
             </button>
           </div>

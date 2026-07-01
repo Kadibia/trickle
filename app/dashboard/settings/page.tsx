@@ -1,10 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { CheckCircle, XCircle, Loader2, Send } from 'lucide-react'
+import { CheckCircle, XCircle, Loader2, Send, RefreshCw, Copy, Check, Eye, EyeOff } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-interface Settings { webhookUrl: string | null; dripRate: number }
+interface Settings {
+  webhookUrl: string | null
+  webhookSecret: string | null
+  dripRate: number
+}
 
 function SectionCard({ title, description, children }: {
   title: string; description: string; children: React.ReactNode
@@ -20,21 +24,34 @@ function SectionCard({ title, description, children }: {
   )
 }
 
-export default function SettingsPage() {
-  const [settings, setSettings] = useState<Settings>({ webhookUrl: '', dripRate: 10 })
-  const [loading, setLoading] = useState(true)
+function FeedbackMsg({ ok, text }: { ok: boolean; text: string }) {
+  return (
+    <div className={cn(
+      'flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm',
+      ok ? 'border-emerald-900/50 bg-emerald-950/30 text-emerald-400'
+         : 'border-red-900/50 bg-red-950/30 text-red-400'
+    )}>
+      {ok ? <CheckCircle className="h-3.5 w-3.5 shrink-0" /> : <XCircle className="h-3.5 w-3.5 shrink-0" />}
+      {text}
+    </div>
+  )
+}
 
-  // Webhook section
+export default function SettingsPage() {
+  const [settings, setSettings] = useState<Settings>({ webhookUrl: '', webhookSecret: null, dripRate: 10 })
+  const [loading, setLoading] = useState(true)
   const [webhookInput, setWebhookInput] = useState('')
   const [webhookSaving, setWebhookSaving] = useState(false)
   const [webhookMsg, setWebhookMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [testLoading, setTestLoading] = useState(false)
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null)
-
-  // Drip rate section
   const [dripInput, setDripInput] = useState('10')
   const [dripSaving, setDripSaving] = useState(false)
   const [dripMsg, setDripMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [secretVisible, setSecretVisible] = useState(false)
+  const [secretCopied, setSecretCopied] = useState(false)
+  const [rotatingSecret, setRotatingSecret] = useState(false)
+  const [rotateMsg, setRotateMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   useEffect(() => {
     fetch('/api/internal/settings')
@@ -51,8 +68,7 @@ export default function SettingsPage() {
   }, [])
 
   async function saveWebhook() {
-    setWebhookSaving(true)
-    setWebhookMsg(null)
+    setWebhookSaving(true); setWebhookMsg(null)
     try {
       const res = await fetch('/api/internal/settings', {
         method: 'PATCH',
@@ -60,22 +76,14 @@ export default function SettingsPage() {
         body: JSON.stringify({ webhookUrl: webhookInput }),
       })
       const json = await res.json()
-      if (json.success) {
-        setSettings((s) => ({ ...s, webhookUrl: webhookInput }))
-        setWebhookMsg({ ok: true, text: 'Webhook URL saved.' })
-      } else {
-        setWebhookMsg({ ok: false, text: json.error ?? 'Save failed.' })
-      }
-    } catch {
-      setWebhookMsg({ ok: false, text: 'Network error.' })
-    } finally {
-      setWebhookSaving(false)
-    }
+      if (json.success) { setSettings((s) => ({ ...s, webhookUrl: webhookInput })); setWebhookMsg({ ok: true, text: 'Webhook URL saved.' }) }
+      else setWebhookMsg({ ok: false, text: json.error ?? 'Save failed.' })
+    } catch { setWebhookMsg({ ok: false, text: 'Network error.' }) }
+    finally { setWebhookSaving(false) }
   }
 
   async function testWebhook() {
-    setTestLoading(true)
-    setTestResult(null)
+    setTestLoading(true); setTestResult(null)
     try {
       const res = await fetch('/api/internal/settings', {
         method: 'POST',
@@ -83,27 +91,15 @@ export default function SettingsPage() {
         body: JSON.stringify({ action: 'test-webhook' }),
       })
       const json = await res.json()
-      setTestResult({
-        ok: json.success,
-        text: json.success
-          ? `Ping delivered (${json.data?.statusCode ?? 200})`
-          : json.error ?? 'Test failed.',
-      })
-    } catch {
-      setTestResult({ ok: false, text: 'Network error.' })
-    } finally {
-      setTestLoading(false)
-    }
+      setTestResult({ ok: json.success, text: json.success ? `Ping delivered (${json.data?.statusCode ?? 200})` : json.error ?? 'Test failed.' })
+    } catch { setTestResult({ ok: false, text: 'Network error.' }) }
+    finally { setTestLoading(false) }
   }
 
   async function saveDripRate() {
     const rate = parseInt(dripInput, 10)
-    if (isNaN(rate) || rate < 1 || rate > 1000) {
-      setDripMsg({ ok: false, text: 'Enter a value between 1 and 1000.' })
-      return
-    }
-    setDripSaving(true)
-    setDripMsg(null)
+    if (isNaN(rate) || rate < 1 || rate > 1000) { setDripMsg({ ok: false, text: 'Enter a value between 1 and 1000.' }); return }
+    setDripSaving(true); setDripMsg(null)
     try {
       const res = await fetch('/api/internal/settings', {
         method: 'PATCH',
@@ -111,26 +107,41 @@ export default function SettingsPage() {
         body: JSON.stringify({ dripRate: rate }),
       })
       const json = await res.json()
-      if (json.success) {
-        setSettings((s) => ({ ...s, dripRate: rate }))
-        setDripMsg({ ok: true, text: 'Drip rate saved.' })
-      } else {
-        setDripMsg({ ok: false, text: json.error ?? 'Save failed.' })
-      }
-    } catch {
-      setDripMsg({ ok: false, text: 'Network error.' })
-    } finally {
-      setDripSaving(false)
-    }
+      if (json.success) { setSettings((s) => ({ ...s, dripRate: rate })); setDripMsg({ ok: true, text: 'Drip rate saved.' }) }
+      else setDripMsg({ ok: false, text: json.error ?? 'Save failed.' })
+    } catch { setDripMsg({ ok: false, text: 'Network error.' }) }
+    finally { setDripSaving(false) }
   }
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
-      </div>
-    )
+  async function copySecret() {
+    if (!settings.webhookSecret) return
+    await navigator.clipboard.writeText(settings.webhookSecret)
+    setSecretCopied(true); setTimeout(() => setSecretCopied(false), 2000)
   }
+
+  async function rotateSecret() {
+    setRotatingSecret(true); setRotateMsg(null)
+    try {
+      const res = await fetch('/api/internal/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rotate-secret' }),
+      })
+      const json = await res.json()
+      if (json.success) {
+        setSettings((s) => ({ ...s, webhookSecret: json.data.webhookSecret }))
+        setSecretVisible(true)
+        setRotateMsg({ ok: true, text: 'Secret rotated. Update your webhook handler.' })
+      } else setRotateMsg({ ok: false, text: json.error ?? 'Rotation failed.' })
+    } catch { setRotateMsg({ ok: false, text: 'Network error.' }) }
+    finally { setRotatingSecret(false) }
+  }
+
+  if (loading) return (
+    <div className="flex items-center justify-center py-20">
+      <Loader2 className="h-5 w-5 animate-spin text-zinc-500" />
+    </div>
+  )
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -139,125 +150,80 @@ export default function SettingsPage() {
         <p className="mt-1 text-sm text-zinc-400">Configure your webhook and queue behaviour.</p>
       </div>
 
-      {/* Section 1 — Webhook */}
-      <SectionCard
-        title="Webhook"
-        description="Trickle will POST each registration payload to this URL."
-      >
+      <SectionCard title="Webhook" description="Trickle will POST each registration payload to this URL.">
         <div className="space-y-4">
           <div className="space-y-1.5">
             <label className="block text-sm font-medium text-zinc-300">Webhook URL</label>
-            <input
-              type="url"
-              value={webhookInput}
-              onChange={(e) => setWebhookInput(e.target.value)}
+            <input type="url" value={webhookInput} onChange={(e) => setWebhookInput(e.target.value)}
               placeholder="https://your-app.com/api/registrations"
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            />
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
           </div>
-
-          {webhookMsg && (
-            <FeedbackMsg ok={webhookMsg.ok} text={webhookMsg.text} />
-          )}
-          {testResult && (
-            <FeedbackMsg ok={testResult.ok} text={testResult.text} />
-          )}
-
+          {webhookMsg && <FeedbackMsg ok={webhookMsg.ok} text={webhookMsg.text} />}
+          {testResult && <FeedbackMsg ok={testResult.ok} text={testResult.text} />}
           <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={saveWebhook}
-              disabled={webhookSaving}
-              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-50"
-            >
-              {webhookSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-              Save URL
+            <button onClick={saveWebhook} disabled={webhookSaving}
+              className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-50">
+              {webhookSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Save URL
             </button>
-            <button
-              onClick={testWebhook}
-              disabled={testLoading || !settings.webhookUrl}
-              className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-zinc-600 disabled:opacity-50"
-            >
-              {testLoading
-                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                : <Send className="h-3.5 w-3.5" />}
-              Test Webhook
+            <button onClick={testWebhook} disabled={testLoading || !settings.webhookUrl}
+              className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-zinc-600 disabled:opacity-50">
+              {testLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} Test Webhook
             </button>
           </div>
         </div>
       </SectionCard>
 
-      {/* Section 2 — Drip Rate */}
-      <SectionCard
-        title="Queue"
-        description="How many registrations per minute to deliver to your webhook."
-      >
+      <SectionCard title="Webhook Signing Secret"
+        description="Verify that webhook requests are genuinely from Trickle using this secret.">
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-zinc-300">
-              Drip Rate
-              <span className="ml-2 font-normal text-zinc-500">(registrations / minute)</span>
-            </label>
-            <input
-              type="number"
-              min={1}
-              max={1000}
-              value={dripInput}
-              onChange={(e) => setDripInput(e.target.value)}
-              className="w-36 rounded-lg border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-            />
-            <p className="text-xs text-zinc-500">
-              Default is 10/min. The worker reads this value from the database per job — changes
-              take effect on the next delivery cycle.
-            </p>
+            <label className="block text-sm font-medium text-zinc-300">Signing Secret</label>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 rounded-lg border border-zinc-700 bg-zinc-950 px-3.5 py-2.5 font-mono text-sm text-zinc-300 overflow-hidden truncate">
+                {secretVisible ? (settings.webhookSecret ?? 'No secret') : (settings.webhookSecret ? '•'.repeat(48) : 'No secret')}
+              </div>
+              <button onClick={() => setSecretVisible((v) => !v)}
+                className="rounded-lg border border-zinc-700 bg-zinc-800 p-2.5 text-zinc-400 transition hover:text-white">
+                {secretVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+              <button onClick={copySecret} disabled={!settings.webhookSecret}
+                className="rounded-lg border border-zinc-700 bg-zinc-800 p-2.5 text-zinc-400 transition hover:text-white disabled:opacity-40">
+                {secretCopied ? <Check className="h-4 w-4 text-emerald-400" /> : <Copy className="h-4 w-4" />}
+              </button>
+            </div>
           </div>
-
-          {dripMsg && <FeedbackMsg ok={dripMsg.ok} text={dripMsg.text} />}
-
-          <button
-            onClick={saveDripRate}
-            disabled={dripSaving}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-50"
-          >
-            {dripSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-            Save Rate
+          <div className="rounded-lg border border-zinc-800 bg-zinc-900/40 p-4 text-xs text-zinc-400 space-y-1.5">
+            <p className="font-medium text-zinc-300">Verify in your webhook handler:</p>
+            <pre className="text-zinc-500 leading-relaxed overflow-x-auto">{`const sig = req.headers['x-trickle-signature']
+const expected = 'sha256=' + createHmac('sha256', SECRET)
+  .update(JSON.stringify(req.body)).digest('hex')
+if (sig !== expected) return res.status(401).send('Unauthorized')`}</pre>
+          </div>
+          {rotateMsg && <FeedbackMsg ok={rotateMsg.ok} text={rotateMsg.text} />}
+          <button onClick={rotateSecret} disabled={rotatingSecret}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-zinc-600 disabled:opacity-50">
+            {rotatingSecret ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Rotate Secret
           </button>
         </div>
       </SectionCard>
 
-      {/* Section 3 — Account (read-only for now) */}
-      <SectionCard
-        title="Account"
-        description="Your developer account details."
-      >
+      <SectionCard title="Queue" description="How many registrations per minute to deliver to your webhook.">
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <label className="block text-sm font-medium text-zinc-300">Email</label>
-            <div className="w-full rounded-lg border border-zinc-800 bg-zinc-800/30 px-3.5 py-2.5 text-sm text-zinc-400">
-              {/* Email shown in topbar — read from session server-side */}
-              Shown in the top bar
-            </div>
+            <label className="block text-sm font-medium text-zinc-300">
+              Drip Rate <span className="ml-2 font-normal text-zinc-500">(registrations / minute)</span>
+            </label>
+            <input type="number" min={1} max={1000} value={dripInput} onChange={(e) => setDripInput(e.target.value)}
+              className="w-36 rounded-lg border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
+            <p className="text-xs text-zinc-500">Default is 10/min. Changes take effect on the next delivery cycle.</p>
           </div>
-          <p className="text-xs text-zinc-600">
-            Password change and account deletion coming in a future release.
-          </p>
+          {dripMsg && <FeedbackMsg ok={dripMsg.ok} text={dripMsg.text} />}
+          <button onClick={saveDripRate} disabled={dripSaving}
+            className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-50">
+            {dripSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Save Rate
+          </button>
         </div>
       </SectionCard>
-    </div>
-  )
-}
-
-function FeedbackMsg({ ok, text }: { ok: boolean; text: string }) {
-  return (
-    <div className={cn(
-      'flex items-center gap-2 rounded-lg border px-3.5 py-2.5 text-sm',
-      ok
-        ? 'border-emerald-900/50 bg-emerald-950/30 text-emerald-400'
-        : 'border-red-900/50 bg-red-950/30 text-red-400'
-    )}>
-      {ok
-        ? <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-        : <XCircle className="h-3.5 w-3.5 shrink-0" />}
-      {text}
     </div>
   )
 }

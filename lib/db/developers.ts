@@ -2,16 +2,18 @@ import { eq } from 'drizzle-orm'
 import { db } from './index'
 import { developers, type Developer, type NewDeveloper } from './schema'
 import { generateApiKey, hashApiKey } from '@/lib/api-keys'
+import { generateWebhookSecret } from '@/lib/webhook-signing'
 
 export async function createDeveloper(
-  data: Omit<NewDeveloper, 'apiKeyHash'>
+  data: Omit<NewDeveloper, 'apiKeyHash' | 'webhookSecret'>
 ): Promise<{ developer: Developer; rawApiKey: string }> {
   const rawApiKey = generateApiKey()
   const apiKeyHash = hashApiKey(rawApiKey)
+  const webhookSecret = generateWebhookSecret()
 
   const [developer] = await db
     .insert(developers)
-    .values({ ...data, apiKeyHash })
+    .values({ ...data, apiKeyHash, webhookSecret })
     .returning()
 
   return { developer, rawApiKey }
@@ -60,6 +62,17 @@ export async function revokeApiKey(developerId: string): Promise<void> {
     .update(developers)
     .set({ apiKeyHash: null })
     .where(eq(developers.id, developerId))
+}
+
+export async function rotateWebhookSecret(
+  developerId: string
+): Promise<string> {
+  const webhookSecret = generateWebhookSecret()
+  await db
+    .update(developers)
+    .set({ webhookSecret })
+    .where(eq(developers.id, developerId))
+  return webhookSecret
 }
 
 export async function updateDeveloperSettings(

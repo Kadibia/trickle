@@ -33,9 +33,18 @@ export default function SignupPage() {
         return
       }
 
-      // Provision developer record
-      await fetch('/api/internal/provision', { method: 'POST' }).catch(() => {})
-      window.location.href = '/dashboard/api-keys'
+      // Provision developer record and capture the raw API key
+      const provisionRes = await fetch('/api/internal/provision', { method: 'POST' })
+      const provisionData = await provisionRes.json()
+
+      const rawApiKey = provisionData?.data?.rawApiKey
+
+      // Pass raw key via URL so API keys page shows amber banner immediately
+      if (rawApiKey) {
+        window.location.href = `/dashboard/api-keys?newKey=${encodeURIComponent(rawApiKey)}`
+      } else {
+        window.location.href = '/dashboard/api-keys'
+      }
     } catch {
       setError('Something went wrong. Please try again.')
       setLoading(false)
@@ -55,10 +64,7 @@ export default function SignupPage() {
 
       {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-        <Link
-          href="/"
-          className="flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
-        >
+        <Link href="/" className="flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white">
           <ArrowLeft className="h-4 w-4" />
           Back to home
         </Link>
@@ -79,49 +85,22 @@ export default function SignupPage() {
             {/* Email form */}
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label htmlFor="email" className="block text-sm font-medium text-zinc-300">
-                  Email
-                </label>
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
+                <label htmlFor="email" className="block text-sm font-medium text-zinc-300">Email</label>
+                <input id="email" type="email" autoComplete="email" required value={email}
+                  onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
               </div>
-
               <div className="space-y-1.5">
-                <label htmlFor="password" className="block text-sm font-medium text-zinc-300">
-                  Password
-                </label>
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={8}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Minimum 8 characters"
-                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                />
+                <label htmlFor="password" className="block text-sm font-medium text-zinc-300">Password</label>
+                <input id="password" type="password" autoComplete="new-password" required minLength={8}
+                  value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Minimum 8 characters"
+                  className="w-full rounded-lg border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white placeholder-zinc-500 outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
               </div>
-
               {error && (
-                <p className="rounded-lg border border-red-900/50 bg-red-950/40 px-3.5 py-2.5 text-sm text-red-400">
-                  {error}
-                </p>
+                <p className="rounded-lg border border-red-900/50 bg-red-950/40 px-3.5 py-2.5 text-sm text-red-400">{error}</p>
               )}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-              >
+              <button type="submit" disabled={loading}
+                className="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50">
                 {loading ? 'Creating account…' : 'Create account'}
               </button>
             </form>
@@ -135,11 +114,8 @@ export default function SignupPage() {
 
             {/* Social buttons */}
             <div className="space-y-3">
-              <button
-                onClick={() => handleSocialLogin('github')}
-                disabled={!!socialLoading}
-                className="w-full flex items-center justify-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-50"
-              >
+              <button onClick={() => handleSocialLogin('github')} disabled={!!socialLoading}
+                className="w-full flex items-center justify-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-50">
                 {socialLoading === 'github' ? 'Redirecting…' : (
                   <>
                     <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
@@ -149,12 +125,8 @@ export default function SignupPage() {
                   </>
                 )}
               </button>
-
-              <button
-                onClick={() => handleSocialLogin('google')}
-                disabled={!!socialLoading}
-                className="w-full flex items-center justify-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-50"
-              >
+              <button onClick={() => handleSocialLogin('google')} disabled={!!socialLoading}
+                className="w-full flex items-center justify-center gap-3 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-700 disabled:opacity-50">
                 {socialLoading === 'google' ? 'Redirecting…' : (
                   <>
                     <svg className="h-4 w-4" viewBox="0 0 24 24">
@@ -172,9 +144,7 @@ export default function SignupPage() {
 
           <p className="mt-5 text-center text-sm text-zinc-500">
             Already have an account?{' '}
-            <Link href="/auth/login" className="text-zinc-300 hover:text-white transition">
-              Sign in
-            </Link>
+            <Link href="/auth/login" className="text-zinc-300 hover:text-white transition">Sign in</Link>
           </p>
         </div>
       </div>

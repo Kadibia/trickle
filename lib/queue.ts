@@ -4,6 +4,7 @@ export interface QueueJobData {
   eventId: string
   developerId: string
   webhookUrl: string
+  webhookSecret?: string | null
   payload: unknown
   dripRate: number
 }
@@ -15,7 +16,6 @@ function getRedis(): Redis {
   })
 }
 
-// Push job to a simple Redis list — worker polls this list
 const QUEUE_KEY = 'trickle:jobs'
 
 export async function pushToQueue(data: QueueJobData): Promise<string> {
@@ -24,8 +24,7 @@ export async function pushToQueue(data: QueueJobData): Promise<string> {
   return data.eventId
 }
 
-export async function getQueueDepth(developerId: string): Promise<number> {
+export async function getQueueDepth(): Promise<number> {
   const redis = getRedis()
-  const len = await redis.llen(QUEUE_KEY)
-  return len
+  return redis.llen(QUEUE_KEY)
 }

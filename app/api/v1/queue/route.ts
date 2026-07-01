@@ -4,7 +4,6 @@ import { createQueueEvent, getQueueDepth } from '@/lib/db/events'
 import { pushToQueue } from '@/lib/queue'
 
 export async function POST(request: NextRequest) {
-  // developerId injected by proxy.ts after key validation
   const developerId = request.headers.get('x-developer-id')
   if (!developerId) {
     return NextResponse.json(
@@ -13,7 +12,6 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Validate Content-Type
   const contentType = request.headers.get('content-type') ?? ''
   if (!contentType.includes('application/json')) {
     return NextResponse.json(
@@ -22,7 +20,6 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Parse + validate body
   let payload: Record<string, unknown>
   try {
     payload = await request.json()
@@ -40,7 +37,6 @@ export async function POST(request: NextRequest) {
     )
   }
 
-  // Fetch developer settings
   const developer = await getDeveloperById(developerId)
   if (!developer) {
     return NextResponse.json(
@@ -61,7 +57,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // Insert queue event (never log payload — log event ID only)
     const event = await createQueueEvent({
       developerId,
       payload,
@@ -71,16 +66,15 @@ export async function POST(request: NextRequest) {
 
     console.log(`[queue] Enqueued event ${event.id} for developer ${developerId}`)
 
-    // Push to BullMQ
     await pushToQueue({
       eventId: event.id,
       developerId,
       webhookUrl: developer.webhookUrl,
+      webhookSecret: developer.webhookSecret,
       payload,
       dripRate: developer.dripRate,
     })
 
-    // Get current queue depth from DB (accurate per-developer count)
     const position = await getQueueDepth(developerId)
 
     return NextResponse.json(
