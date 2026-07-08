@@ -4,6 +4,7 @@
 :root {
   --background: #0a0a0a;
   --foreground: #fafafa;
+  --font-jakarta: 'Plus Jakarta Sans', sans-serif;
 }
 
 html {
@@ -17,30 +18,27 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Scrollbar ───────────────────────────────────────────────────── */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+.font-sans {
+  font-family: var(--font-jakarta), sans-serif;
 }
 
-/* ── Global 150ms ease transitions ──────────────────────────────── */
-button,
-a,
-input,
-select,
-textarea {
+/* ── Scrollbar ───────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3f3f46; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #52525b; }
+
+/* ── Global transitions ──────────────────────────────────────────── */
+button, a, input, select, textarea {
   transition-duration: 150ms;
   transition-timing-function: ease;
+}
+
+/* ── Button click feedback ───────────────────────────────────────── */
+button:active:not(:disabled) {
+  transform: scale(0.96) !important;
+  opacity: 0.85 !important;
+  transition-duration: 80ms !important;
 }
 
 /* ── Focus ring ─────────────────────────────────────────────────── */
@@ -56,51 +54,19 @@ textarea {
   color: #93c5fd;
 }
 
-/* ── Font variable ───────────────────────────────────────────────── */
-:root {
-  --font-jakarta: 'Plus Jakarta Sans', sans-serif;
-}
-
-.font-sans {
-  font-family: var(--font-jakarta), sans-serif;
-}
-
 /* ── Lightning animation ─────────────────────────────────────────── */
 @keyframes lightning {
   0%, 100% {
-    text-shadow:
-      0 0 4px #fbbf24,
-      0 0 10px #f59e0b,
-      0 0 20px #d97706;
+    text-shadow: 0 0 4px #fbbf24, 0 0 10px #f59e0b, 0 0 20px #d97706;
     color: #fde68a;
   }
-  20% {
-    text-shadow:
-      0 0 2px #fbbf24,
-      0 0 6px #f59e0b;
-    color: #fcd34d;
-  }
+  20% { text-shadow: 0 0 2px #fbbf24, 0 0 6px #f59e0b; color: #fcd34d; }
   40% {
-    text-shadow:
-      0 0 8px #fbbf24,
-      0 0 24px #f59e0b,
-      0 0 40px #d97706,
-      0 0 60px #b45309;
+    text-shadow: 0 0 8px #fbbf24, 0 0 24px #f59e0b, 0 0 40px #d97706, 0 0 60px #b45309;
     color: #fff;
   }
-  60% {
-    text-shadow:
-      0 0 4px #fbbf24,
-      0 0 12px #f59e0b;
-    color: #fde68a;
-  }
-  80% {
-    text-shadow:
-      0 0 10px #fbbf24,
-      0 0 30px #f59e0b,
-      0 0 50px #d97706;
-    color: #fef3c7;
-  }
+  60% { text-shadow: 0 0 4px #fbbf24, 0 0 12px #f59e0b; color: #fde68a; }
+  80% { text-shadow: 0 0 10px #fbbf24, 0 0 30px #f59e0b, 0 0 50px #d97706; color: #fef3c7; }
 }
 
 @keyframes bolt-sweep {

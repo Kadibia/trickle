@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDeveloperById } from '@/lib/db/developers'
 import { createQueueEvent, getQueueDepth } from '@/lib/db/events'
 import { pushToQueue } from '@/lib/queue'
+import { trackAndDetectSurge } from '@/lib/surge'
 
 export async function POST(request: NextRequest) {
   const developerId = request.headers.get('x-developer-id')
@@ -57,6 +58,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    // Track request rate and detect surge (non-blocking)
+    const isSurging = await trackAndDetectSurge(developerId).catch(() => false)
+
     const event = await createQueueEvent({
       developerId,
       payload,
@@ -64,7 +68,7 @@ export async function POST(request: NextRequest) {
       attempts: 0,
     })
 
-    console.log(`[queue] Enqueued event ${event.id} for developer ${developerId}`)
+    console.log(`[queue] Enqueued event ${event.id} for developer ${developerId}${isSurging ? ' [SURGE DETECTED]' : ''}`)
 
     await pushToQueue({
       eventId: event.id,
@@ -76,15 +80,20 @@ export async function POST(request: NextRequest) {
     })
 
     const position = await getQueueDepth(developerId)
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
     return NextResponse.json(
       {
         success: true,
         data: {
-          queue_id: event.id,
+          queue_id:   event.id,
           position,
-          status: 'queued',
-          message: 'Registration queued. Your webhook will receive it shortly.',
+          status:     'queued',
+          status_url: `${baseUrl}/queue-status/${event.id}`,
+          surge:      isSurging,
+          message:    isSurging
+            ? 'Traffic surge detected. Trickle is protecting your server.'
+            : 'Registration queued. Your webhook will receive it shortly.',
         },
       },
       { status: 202 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { Coins, Zap, CheckCircle, AlertCircle, Clock } from 'lucide-react'
+import { Coins, Zap, CheckCircle, AlertCircle, Clock, AlertTriangle } from 'lucide-react'
 import { useDashboardStream } from '@/hooks/use-dashboard-stream'
 import { StatsCard } from '@/components/dashboard/stats-card'
 import { cn } from '@/lib/utils'
@@ -41,18 +41,13 @@ function RecentEventsTable({ events }: { events: QueueEvent[] }) {
           {events.map((event, i) => {
             const badge = STATUS_BADGE[event.status] ?? STATUS_BADGE.queued
             return (
-              <tr
-                key={event.id}
-                className={cn(
-                  'border-b border-zinc-800/60 transition-colors hover:bg-zinc-800/30',
-                  i === events.length - 1 && 'border-b-0'
-                )}
-              >
+              <tr key={event.id} className={cn(
+                'border-b border-zinc-800/60 transition-colors hover:bg-zinc-800/30',
+                i === events.length - 1 && 'border-b-0'
+              )}>
                 <td className="px-5 py-3.5 text-zinc-400 tabular-nums text-xs">
                   {new Date(event.createdAt).toLocaleTimeString('en-GB', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
                   })}
                 </td>
                 <td className="px-5 py-3.5 font-mono text-xs text-zinc-300">
@@ -81,18 +76,31 @@ function RecentEventsTable({ events }: { events: QueueEvent[] }) {
 export default function OverviewPage() {
   const { stats, isConnected } = useDashboardStream()
 
-  const fmt = (n: number | undefined) =>
-    n != null ? n.toLocaleString() : '—'
+  const fmt = (n: number | undefined) => n != null ? n.toLocaleString() : '—'
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+
+      {/* Surge alert banner */}
+      {stats?.isSurging && (
+        <div className="rounded-xl border border-amber-700/50 bg-amber-950/20 px-5 py-4 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold text-amber-300">Traffic surge detected</p>
+            <p className="text-xs text-amber-400/70 mt-0.5">
+              Your app is receiving {stats.currentRate} requests this minute — significantly above your normal rate.
+              Trickle is absorbing the surge and protecting your server. All registrations are safely queued.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Overview</h1>
           <p className="mt-1 text-sm text-zinc-400">Live queue activity.</p>
         </div>
-        {/* Connection indicator */}
         <div className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-3 py-1.5">
           <span className={cn(
             'h-2 w-2 rounded-full',
@@ -106,33 +114,29 @@ export default function OverviewPage() {
 
       {/* Stats cards */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatsCard
-          title="Credit Balance"
-          value={fmt(stats?.creditBalance)}
-          subtitle="1 credit = 1 delivery"
-          icon={Coins}
-        />
-        <StatsCard
-          title="Queue Depth"
-          value={fmt(stats?.queueDepth)}
-          subtitle="Pending deliveries"
-          icon={Zap}
-        />
-        <StatsCard
-          title="Delivered Today"
-          value={fmt(stats?.deliveredToday)}
-          subtitle="Since midnight UTC"
-          icon={CheckCircle}
-          trend={stats?.deliveredToday ? 'up' : 'neutral'}
-        />
-        <StatsCard
-          title="Failed Today"
-          value={fmt(stats?.failedToday)}
-          subtitle="Since midnight UTC"
-          icon={AlertCircle}
-          trend={stats?.failedToday ? 'down' : 'neutral'}
-        />
+        <StatsCard title="Credit Balance"   value={fmt(stats?.creditBalance)}  subtitle="1 credit = 1 delivery" icon={Coins} />
+        <StatsCard title="Queue Depth"      value={fmt(stats?.queueDepth)}     subtitle="Pending deliveries"   icon={Zap} />
+        <StatsCard title="Delivered Today"  value={fmt(stats?.deliveredToday)} subtitle="Since midnight UTC"   icon={CheckCircle} trend={stats?.deliveredToday ? 'up' : 'neutral'} />
+        <StatsCard title="Failed Today"     value={fmt(stats?.failedToday)}    subtitle="Since midnight UTC"   icon={AlertCircle} trend={stats?.failedToday ? 'down' : 'neutral'} />
       </div>
+
+      {/* Current rate */}
+      {stats && (
+        <div className="flex items-center gap-3 text-xs text-zinc-500">
+          <span>Current rate:</span>
+          <span className={cn(
+            'font-semibold',
+            stats.isSurging ? 'text-amber-400' : 'text-zinc-300'
+          )}>
+            {stats.currentRate} req/min
+          </span>
+          {stats.isSurging && (
+            <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-amber-400 text-[10px] font-semibold">
+              SURGE
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Recent events */}
       <div>

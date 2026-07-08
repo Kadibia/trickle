@@ -6,6 +6,7 @@ import { getQueueDepth, getRecentEvents } from '@/lib/db/events'
 import { db } from '@/lib/db'
 import { queueEvents } from '@/lib/db/schema'
 import { and, eq, gte, sql } from 'drizzle-orm'
+import { getSurgeStatus, getCurrentRate } from '@/lib/surge'
 
 export async function GET() {
   try {
@@ -18,21 +19,19 @@ export async function GET() {
     const midnight = new Date()
     midnight.setUTCHours(0, 0, 0, 0)
 
-    const [creditBalance, queueDepth, recentEvents, todayStats] = await Promise.all([
-      getBalance(developerId),
-      getQueueDepth(developerId),
-      getRecentEvents(developerId, 10),
-      db
-        .select({ count: sql<number>`COUNT(*)`, status: queueEvents.status })
-        .from(queueEvents)
-        .where(
-          and(
-            eq(queueEvents.developerId, developerId),
-            gte(queueEvents.createdAt, midnight)
-          )
-        )
-        .groupBy(queueEvents.status),
-    ])
+    const [creditBalance, queueDepth, recentEvents, todayStats, isSurging, currentRate] =
+      await Promise.all([
+        getBalance(developerId),
+        getQueueDepth(developerId),
+        getRecentEvents(developerId, 10),
+        db
+          .select({ count: sql<number>`COUNT(*)`, status: queueEvents.status })
+          .from(queueEvents)
+          .where(and(eq(queueEvents.developerId, developerId), gte(queueEvents.createdAt, midnight)))
+          .groupBy(queueEvents.status),
+        getSurgeStatus(developerId).catch(() => false),
+        getCurrentRate(developerId).catch(() => 0),
+      ])
 
     let deliveredToday = 0
     let failedToday = 0
@@ -43,7 +42,15 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      data: { creditBalance, queueDepth, deliveredToday, failedToday, recentEvents },
+      data: {
+        creditBalance,
+        queueDepth,
+        deliveredToday,
+        failedToday,
+        recentEvents,
+        isSurging,
+        currentRate,
+      },
     })
   } catch (err) {
     console.error('GET /api/internal/analytics/stats error:', err)
