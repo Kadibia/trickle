@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { getDeveloperById, updateDeveloperSettings, rotateWebhookSecret } from '@/lib/db/developers'
 
+const MAX_DRIP_RATE = 1_000_000
+const MIN_DRIP_RATE = 1
+
 export async function GET() {
   try {
     const session = await auth.api.getSession({ headers: await headers() })
@@ -39,8 +42,16 @@ export async function PATCH(request: NextRequest) {
       }
     }
 
-    if (dripRate !== undefined && (dripRate < 1 || dripRate > 1000 || !Number.isInteger(dripRate))) {
-      return NextResponse.json({ success: false, error: 'Drip rate must be between 1 and 1000', code: 'INVALID_DRIP_RATE' }, { status: 422 })
+    if (dripRate !== undefined && (
+      !Number.isInteger(dripRate) ||
+      dripRate < MIN_DRIP_RATE ||
+      dripRate > MAX_DRIP_RATE
+    )) {
+      return NextResponse.json({
+        success: false,
+        error: `Drip rate must be between ${MIN_DRIP_RATE} and ${MAX_DRIP_RATE.toLocaleString()}`,
+        code: 'INVALID_DRIP_RATE'
+      }, { status: 422 })
     }
 
     const updated = await updateDeveloperSettings(session.user.id, { webhookUrl, dripRate })
@@ -61,13 +72,11 @@ export async function POST(request: NextRequest) {
 
     const { action } = await request.json() as { action?: string }
 
-    // ── Rotate webhook secret ──────────────────────────────────────
     if (action === 'rotate-secret') {
       const webhookSecret = await rotateWebhookSecret(session.user.id)
       return NextResponse.json({ success: true, data: { webhookSecret } })
     }
 
-    // ── Test webhook ───────────────────────────────────────────────
     if (action === 'test-webhook') {
       const developer = await getDeveloperById(session.user.id)
       if (!developer?.webhookUrl) {
