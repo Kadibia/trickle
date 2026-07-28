@@ -9,6 +9,7 @@ import {
   BarChart2,
   Settings,
   BookOpen,
+  GitBranch,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +18,7 @@ const navItems = [
   { label: 'API Keys',   href: '/dashboard/api-keys',  icon: Key },
   { label: 'Credits',    href: '/dashboard/credits',   icon: CreditCard },
   { label: 'Analytics', href: '/dashboard/analytics', icon: BarChart2 },
+  { label: 'Routing',   href: '/dashboard/routing',   icon: GitBranch },
   { label: 'Settings',  href: '/dashboard/settings',  icon: Settings },
   { label: 'Docs',      href: '/dashboard/docs',      icon: BookOpen },
 ]
@@ -26,7 +28,6 @@ export function Sidebar() {
 
   return (
     <aside className="fixed inset-y-0 left-0 z-20 flex w-60 flex-col border-r border-zinc-800 bg-[#0f0f0f]">
-      {/* Wordmark — links back to landing page */}
       <div className="flex h-14 items-center border-b border-zinc-800 px-5">
         <Link href="/" className="flex items-center gap-2 group">
           <span className="text-lg font-bold tracking-tight text-white group-hover:text-zinc-300 transition">
@@ -38,7 +39,6 @@ export function Sidebar() {
         </Link>
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 space-y-0.5 px-3 py-4">
         {navItems.map(({ label, href, icon: Icon, exact }) => {
           const isActive = exact ? pathname === href : pathname.startsWith(href)
@@ -60,7 +60,6 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
       <div className="border-t border-zinc-800 px-5 py-4">
         <p className="text-xs text-zinc-600">© 2025 Trickle</p>
       </div>
