@@ -19,7 +19,7 @@ export async function GET() {
     const midnight = new Date()
     midnight.setUTCHours(0, 0, 0, 0)
 
-    const [creditBalance, queueDepth, recentEvents, todayStats, isSurging, currentRate] =
+    const [creditBalance, queueDepth, recentEvents, todayStats, routedTodayResult, isSurging, currentRate] =
       await Promise.all([
         getBalance(developerId),
         getQueueDepth(developerId),
@@ -29,9 +29,19 @@ export async function GET() {
           .from(queueEvents)
           .where(and(eq(queueEvents.developerId, developerId), gte(queueEvents.createdAt, midnight)))
           .groupBy(queueEvents.status),
+        db
+          .select({ count: sql<number>`COUNT(*)` })
+          .from(queueEvents)
+          .where(and(
+            eq(queueEvents.developerId, developerId),
+            gte(queueEvents.createdAt, midnight),
+            sql`${queueEvents.routingRuleId} IS NOT NULL`
+          )),
         getSurgeStatus(developerId).catch(() => false),
         getCurrentRate(developerId).catch(() => 0),
       ])
+
+    const routedToday = Number(routedTodayResult[0]?.count ?? 0)
 
     let deliveredToday = 0
     let failedToday = 0
@@ -47,6 +57,7 @@ export async function GET() {
         queueDepth,
         deliveredToday,
         failedToday,
+        routedToday,
         recentEvents,
         isSurging,
         currentRate,

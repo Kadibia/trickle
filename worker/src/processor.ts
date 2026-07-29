@@ -3,6 +3,7 @@ import { log } from './logger'
 import { deliverWebhook } from './webhook'
 import { deductCredit } from './credits'
 import { recordResponseTime, getEffectiveRate, getP95 } from './smart-rate'
+import { resolveRoute, type RoutingConfig } from './routing'
 import type { QueueJobData } from './types'
 
 const RETRY_DELAYS_MS = [5_000, 30_000, 120_000]
@@ -22,10 +23,11 @@ async function getDeveloperWebhookInfo(developerId: string): Promise<{
   webhookUrl: string | null
   webhookSecret: string | null
   dripRate: number
+  routingRules: RoutingConfig | null
 }> {
   const sql = getDb()
   const rows = await sql`
-    SELECT webhook_url, webhook_secret, drip_rate
+    SELECT webhook_url, webhook_secret, drip_rate, routing_rules
     FROM developers
     WHERE id = ${developerId}
     LIMIT 1
@@ -34,7 +36,13 @@ async function getDeveloperWebhookInfo(developerId: string): Promise<{
     webhookUrl:    (rows[0]?.webhook_url as string | null) ?? null,
     webhookSecret: (rows[0]?.webhook_secret as string | null) ?? null,
     dripRate:      (rows[0]?.drip_rate as number) ?? 10,
+    routingRules:  (rows[0]?.routing_rules as RoutingConfig | null) ?? null,
   }
+}
+
+async function recordRoutingMatch(eventId: string, ruleId: string | null): Promise<void> {
+  const sql = getDb()
+  await sql`UPDATE queue_events SET routing_rule_id = ${ruleId} WHERE id = ${eventId}`
 }
 
 async function markDelivered(eventId: string): Promise<void> {
@@ -73,9 +81,17 @@ export async function processJob(job: QueueJobData): Promise<void> {
 
   try {
     const info = await getDeveloperWebhookInfo(developerId)
-    webhookUrl    = info.webhookUrl
     webhookSecret = info.webhookSecret
     configuredRate = info.dripRate
+
+    const payloadRecord = (payload && typeof payload === 'object' ? payload : {}) as Record<string, unknown>
+    const route = resolveRoute(payloadRecord, info.routingRules, info.webhookUrl)
+    webhookUrl = route.webhookUrl
+
+    if (route.matchedRuleId) {
+      log.info(`Routing rule matched for ${developerId}`, { eventId, ruleId: route.matchedRuleId, webhookUrl })
+      await recordRoutingMatch(eventId, route.matchedRuleId).catch((err) => log.warn('Failed to record routing match', err))
+    }
   } catch (err) {
     log.error(`Failed to fetch webhook info for ${developerId}`, err)
     await markFailed(eventId).catch(() => {})

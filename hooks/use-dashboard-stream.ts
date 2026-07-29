@@ -8,6 +8,7 @@ export interface DashboardStats {
   queueDepth: number
   deliveredToday: number
   failedToday: number
+  routedToday: number
   recentEvents: QueueEvent[]
   isSurging: boolean
   currentRate: number

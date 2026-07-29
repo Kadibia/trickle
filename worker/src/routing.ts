@@ -1,3 +1,7 @@
+// Mirrors lib/routing.ts in the Next.js app. The worker is a standalone
+// package (deployed separately to Railway) and can't import from '@/lib',
+// so this logic is duplicated here. Keep both files in sync.
+
 export interface RoutingRule {
   id: string
   field: string

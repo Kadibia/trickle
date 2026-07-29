@@ -64,6 +64,7 @@ export const developers = pgTable('developers', {
   webhookUrl: text('webhook_url'),
   webhookSecret: text('webhook_secret'),
   dripRate: integer('drip_rate').default(10).notNull(),
+  routingRules: jsonb('routing_rules'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })
 
@@ -86,6 +87,7 @@ export const queueEvents = pgTable('queue_events', {
   payload: jsonb('payload').notNull(),
   status: text('status').default('queued').notNull(),
   attempts: integer('attempts').default(0).notNull(),
+  routingRuleId: text('routing_rule_id'),
   deliveredAt: timestamp('delivered_at'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })

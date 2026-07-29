@@ -1,6 +1,6 @@
 'use client'
 
-import { Coins, Zap, CheckCircle, AlertCircle, Clock, AlertTriangle } from 'lucide-react'
+import { Coins, Zap, CheckCircle, AlertCircle, Clock, AlertTriangle, GitBranch } from 'lucide-react'
 import { useDashboardStream } from '@/hooks/use-dashboard-stream'
 import { StatsCard } from '@/components/dashboard/stats-card'
 import { cn } from '@/lib/utils'
@@ -34,6 +34,7 @@ function RecentEventsTable({ events }: { events: QueueEvent[] }) {
             <th className="px-5 py-3 text-left font-medium text-zinc-400">Time</th>
             <th className="px-5 py-3 text-left font-medium text-zinc-400">Event ID</th>
             <th className="px-5 py-3 text-left font-medium text-zinc-400">Status</th>
+            <th className="px-5 py-3 text-center font-medium text-zinc-400">Routed</th>
             <th className="px-5 py-3 text-right font-medium text-zinc-400">Attempts</th>
           </tr>
         </thead>
@@ -60,6 +61,15 @@ function RecentEventsTable({ events }: { events: QueueEvent[] }) {
                   )}>
                     {badge.label}
                   </span>
+                </td>
+                <td className="px-5 py-3.5 text-center">
+                  {event.routingRuleId ? (
+                    <span title="Delivered via a routing rule" className="inline-flex items-center justify-center rounded-full bg-purple-500/15 p-1 text-purple-400 border border-purple-500/30">
+                      <GitBranch className="h-3 w-3" />
+                    </span>
+                  ) : (
+                    <span className="text-zinc-700">—</span>
+                  )}
                 </td>
                 <td className="px-5 py-3.5 text-right text-zinc-400 tabular-nums">
                   {event.attempts}
@@ -133,6 +143,12 @@ export default function OverviewPage() {
           {stats.isSurging && (
             <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 text-amber-400 text-[10px] font-semibold">
               SURGE
+            </span>
+          )}
+          {stats.routedToday > 0 && (
+            <span className="flex items-center gap-1.5 rounded-full border border-purple-500/20 bg-purple-500/10 px-2.5 py-0.5 text-purple-400">
+              <GitBranch className="h-3 w-3" />
+              {stats.routedToday} routed by rule today
             </span>
           )}
         </div>
