@@ -98,7 +98,7 @@ export default function SettingsPage() {
 
   async function saveDripRate() {
     const rate = parseInt(dripInput, 10)
-    if (isNaN(rate) || rate < 1 || rate > 100000000) { setDripMsg({ ok: false, text: 'Enter a value between 1 and 100,000.' }); return }
+    if (isNaN(rate) || rate < 1 || rate > 1500) { setDripMsg({ ok: false, text: 'Enter a value between 1 and 1,500.' }); return }
     setDripSaving(true); setDripMsg(null)
     try {
       const res = await fetch('/api/internal/settings', {
@@ -213,9 +213,9 @@ if (sig !== expected) return res.status(401).send('Unauthorized')`}</pre>
             <label className="block text-sm font-medium text-zinc-300">
               Drip Rate <span className="ml-2 font-normal text-zinc-500">(registrations / minute)</span>
             </label>
-            <input type="number" min={1} max={1000000} value={dripInput} onChange={(e) => setDripInput(e.target.value)}
+            <input type="number" min={1} max={1500} value={dripInput} onChange={(e) => setDripInput(e.target.value)}
               className="w-36 rounded-lg border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
-            <p className="text-xs text-zinc-500">Default is 10/min. Max is 100,000/min. Changes take effect on the next delivery cycle.</p>
+            <p className="text-xs text-zinc-500">Default is 10/min. Max is 1,500/min. Changes take effect on the next delivery cycle.</p>
           </div>
           {dripMsg && <FeedbackMsg ok={dripMsg.ok} text={dripMsg.text} />}
           <button onClick={saveDripRate} disabled={dripSaving}

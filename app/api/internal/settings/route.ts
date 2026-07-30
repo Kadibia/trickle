@@ -3,7 +3,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { getDeveloperById, updateDeveloperSettings, rotateWebhookSecret } from '@/lib/db/developers'
 
-const MAX_DRIP_RATE = 1_000_000
+// Ceiling reflects what worker/src/scheduler.ts can actually sustain per
+// developer: MAX_PER_TICK_PER_DEV (50) deliveries per 2s tick = 1,500/min.
+// Raising this requires scaling the worker (more instances, or moving off
+// REST polling), not just changing this number.
+const MAX_DRIP_RATE = 1_500
 const MIN_DRIP_RATE = 1
 
 export async function GET() {

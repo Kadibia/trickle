@@ -3,8 +3,7 @@ import { createServer } from 'http'
 import cron from 'node-cron'
 import { neon } from '@neondatabase/serverless'
 import { log } from './logger'
-import { processJob } from './processor'
-import type { QueueJobData } from './types'
+import { runSchedulerTick, getJobsScheduled } from './scheduler'
 
 const { UPSTASH_REDIS_URL, UPSTASH_REDIS_TOKEN, DATABASE_URL } = process.env
 
@@ -13,42 +12,14 @@ if (!UPSTASH_REDIS_URL || !UPSTASH_REDIS_TOKEN || !DATABASE_URL) {
   process.exit(1)
 }
 
-const QUEUE_KEY = 'trickle:jobs'
 const POLL_INTERVAL_MS = 2000
 
-let lastPollAt = Date.now()
-let jobsProcessed = 0
+let lastTickAt = Date.now()
 const startedAt = Date.now()
 
-// ── Poll Redis list for jobs via Upstash REST ──────────────────────
-async function pollQueue(): Promise<void> {
-  lastPollAt = Date.now()
-  try {
-    // Upstash REST API: POST /pipeline for atomic rpop
-    const res = await fetch(`${UPSTASH_REDIS_URL}/rpop/${encodeURIComponent(QUEUE_KEY)}`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${UPSTASH_REDIS_TOKEN}`,
-      },
-    })
-
-    if (!res.ok) {
-      log.error(`Redis poll HTTP error: ${res.status}`)
-      return
-    }
-
-    const data = await res.json() as { result: string | null }
-
-    if (!data.result) return
-
-    const job = JSON.parse(data.result) as QueueJobData
-    log.info(`Picked up job for event ${job.eventId}`)
-    await processJob(job)
-    jobsProcessed++
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    log.error(`Poll error: ${message}`)
-  }
+async function tick(): Promise<void> {
+  lastTickAt = Date.now()
+  await runSchedulerTick()
 }
 
 // ── Monthly credit allocation ──────────────────────────────────────
@@ -78,9 +49,9 @@ async function runMonthlyCreditAllocation(): Promise<void> {
 cron.schedule('0 0 1 * *', () => { void runMonthlyCreditAllocation() }, { timezone: 'UTC' })
 
 log.info('Monthly credit cron scheduled (1st of each month, 00:00 UTC)')
-log.info('Trickle worker started. Polling for jobs...')
+log.info('Trickle worker started. Scheduling deliveries per developer drip rate...')
 
-setInterval(() => { void pollQueue() }, POLL_INTERVAL_MS)
+setInterval(() => { void tick() }, POLL_INTERVAL_MS)
 
 // ── Health-check HTTP server ────────────────────────────────────────
 // Render's free tier only offers always-on compute for "Web Services"
@@ -93,15 +64,15 @@ setInterval(() => { void pollQueue() }, POLL_INTERVAL_MS)
 const PORT = process.env.PORT ?? 3000
 
 const server = createServer((_req, res) => {
-  const secondsSincePoll = Math.round((Date.now() - lastPollAt) / 1000)
-  const healthy = secondsSincePoll < 30 // poll loop should tick every 2s
+  const secondsSinceTick = Math.round((Date.now() - lastTickAt) / 1000)
+  const healthy = secondsSinceTick < 30 // scheduler tick should run every 2s
 
   res.writeHead(healthy ? 200 : 503, { 'Content-Type': 'application/json' })
   res.end(JSON.stringify({
     status: healthy ? 'ok' : 'stalled',
     uptimeSeconds: Math.round((Date.now() - startedAt) / 1000),
-    secondsSinceLastPoll: secondsSincePoll,
-    jobsProcessed,
+    secondsSinceLastTick: secondsSinceTick,
+    jobsScheduled: getJobsScheduled(),
   }))
 })
 
