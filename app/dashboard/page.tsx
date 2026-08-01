@@ -1,6 +1,7 @@
 'use client'
 
-import { Coins, Zap, CheckCircle, AlertCircle, Clock, AlertTriangle, GitBranch } from 'lucide-react'
+import { useState } from 'react'
+import { Coins, Zap, CheckCircle, AlertCircle, Clock, AlertTriangle, GitBranch, RefreshCw, Loader2 } from 'lucide-react'
 import { useDashboardStream } from '@/hooks/use-dashboard-stream'
 import { StatsCard } from '@/components/dashboard/stats-card'
 import { cn } from '@/lib/utils'
@@ -12,7 +13,17 @@ const STATUS_BADGE: Record<string, { label: string; className: string }> = {
   failed:    { label: 'Failed',    className: 'bg-red-500/15 text-red-400 border-red-500/30' },
 }
 
-function RecentEventsTable({ events }: { events: QueueEvent[] }) {
+function RecentEventsTable({
+  events,
+  retryingIds,
+  retryErrors,
+  onRetry,
+}: {
+  events: QueueEvent[]
+  retryingIds: Set<string>
+  retryErrors: Record<string, string>
+  onRetry: (eventId: string) => void
+}) {
   if (events.length === 0) {
     return (
       <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 px-6 py-10 text-center">
@@ -36,11 +47,14 @@ function RecentEventsTable({ events }: { events: QueueEvent[] }) {
             <th className="px-5 py-3 text-left font-medium text-zinc-400">Status</th>
             <th className="px-5 py-3 text-center font-medium text-zinc-400">Routed</th>
             <th className="px-5 py-3 text-right font-medium text-zinc-400">Attempts</th>
+            <th className="px-5 py-3 text-right font-medium text-zinc-400">Actions</th>
           </tr>
         </thead>
         <tbody>
           {events.map((event, i) => {
             const badge = STATUS_BADGE[event.status] ?? STATUS_BADGE.queued
+            const isRetrying = retryingIds.has(event.id)
+            const retryError = retryErrors[event.id]
             return (
               <tr key={event.id} className={cn(
                 'border-b border-zinc-800/60 transition-colors hover:bg-zinc-800/30',
@@ -74,6 +88,35 @@ function RecentEventsTable({ events }: { events: QueueEvent[] }) {
                 <td className="px-5 py-3.5 text-right text-zinc-400 tabular-nums">
                   {event.attempts}
                 </td>
+                <td className="px-5 py-3.5 text-right">
+                  {event.status === 'failed' ? (
+                    <div className="flex flex-col items-end gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onRetry(event.id)}
+                        disabled={isRetrying}
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-lg border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-300 transition-colors',
+                          isRetrying
+                            ? 'cursor-not-allowed opacity-60'
+                            : 'hover:border-zinc-600 hover:bg-zinc-800 hover:text-white'
+                        )}
+                      >
+                        {isRetrying ? (
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                        ) : (
+                          <RefreshCw className="h-3 w-3" />
+                        )}
+                        Retry
+                      </button>
+                      {retryError && (
+                        <span className="text-[11px] text-red-400">{retryError}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-zinc-700">—</span>
+                  )}
+                </td>
               </tr>
             )
           })}
@@ -85,8 +128,48 @@ function RecentEventsTable({ events }: { events: QueueEvent[] }) {
 
 export default function OverviewPage() {
   const { stats, isConnected } = useDashboardStream()
+  const [retryingIds, setRetryingIds] = useState<Set<string>>(new Set())
+  const [retryErrors, setRetryErrors] = useState<Record<string, string>>({})
 
   const fmt = (n: number | undefined) => n != null ? n.toLocaleString() : '—'
+
+  async function handleRetry(eventId: string) {
+    setRetryingIds((prev) => new Set(prev).add(eventId))
+    setRetryErrors((prev) => {
+      const next = { ...prev }
+      delete next[eventId]
+      return next
+    })
+
+    try {
+      const res = await fetch(`/api/internal/events/${eventId}/replay`, {
+        method: 'POST',
+      })
+      const json = await res.json()
+
+      if (!res.ok || !json.success) {
+        setRetryErrors((prev) => ({
+          ...prev,
+          [eventId]: json.error ?? 'Retry failed. Try again.',
+        }))
+        return
+      }
+
+      // Success: the SSE stream will push the updated status (queued)
+      // within a few seconds, so no local event-state mutation needed.
+    } catch {
+      setRetryErrors((prev) => ({
+        ...prev,
+        [eventId]: 'Network error. Try again.',
+      }))
+    } finally {
+      setRetryingIds((prev) => {
+        const next = new Set(prev)
+        next.delete(eventId)
+        return next
+      })
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -166,7 +249,12 @@ export default function OverviewPage() {
           )}
         </div>
         {stats ? (
-          <RecentEventsTable events={stats.recentEvents} />
+          <RecentEventsTable
+            events={stats.recentEvents}
+            retryingIds={retryingIds}
+            retryErrors={retryErrors}
+            onRetry={handleRetry}
+          />
         ) : (
           <div className="rounded-xl border border-zinc-800 bg-zinc-900/30 px-6 py-10 text-center">
             <p className="text-sm text-zinc-500">

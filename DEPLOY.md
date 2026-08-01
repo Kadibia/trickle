@@ -16,11 +16,12 @@ PAYSTACK_SECRET_KEY=   # sk_live_...
 NEXT_PUBLIC_APP_URL=   # https://your-app.vercel.app
 ```
 
-**Worker (/worker/.env → Railway)**
+**Worker (/worker/.env → Render)**
 ```
 DATABASE_URL=
 UPSTASH_REDIS_URL=
 UPSTASH_REDIS_TOKEN=
+PORT=            # Render sets this automatically; health-check server binds to it
 ```
 
 ### Database
@@ -61,21 +62,43 @@ npm run db:studio        # verify all tables exist
    https://YOUR_VERCEL_URL/api/webhooks/paystack
    ```
 
-## Part 4 — Deploy Worker to Railway
+## Part 4 — Deploy Worker to Render
 
-1. railway.app → New Project → Deploy from GitHub repo
+1. render.com → New → Web Service → connect your GitHub repo
+   (must be a Web Service, not "Background Worker" — Render's free tier
+   only keeps Web Services always-invocable; Background Workers aren't
+   available on the free plan)
 
-2. Set root directory to `/worker` in Railway service settings
+2. Root Directory: `worker`
 
-3. Set env vars in Railway dashboard:
+3. Build Command: `npm install && npm run build`
+   Start Command: `npm start`
+
+4. Set env vars in Render dashboard:
    - DATABASE_URL
    - UPSTASH_REDIS_URL
    - UPSTASH_REDIS_TOKEN
+   (Render sets PORT automatically — the worker's health-check HTTP
+   server binds to it)
 
-4. Deploy → check logs for:
+5. Deploy → check logs for:
    ```
-   Trickle worker started. Listening for jobs...
+   Trickle worker started. Scheduling deliveries per developer drip rate...
    Monthly credit cron scheduled (1st of each month, 00:00 UTC)
+   Health-check server listening on port XXXX
+   ```
+
+6. Render's free tier spins down after 15 minutes of no inbound HTTP
+   requests — since this worker's real work happens in a background
+   `setInterval` loop, not in response to HTTP requests, it will spin
+   down and stop processing the queue unless kept warm. Set up
+   UptimeRobot (or similar) to GET the service's `/` health-check
+   endpoint every 5 minutes to prevent this.
+
+7. Verify the health check directly:
+   ```bash
+   curl https://YOUR_RENDER_URL/
+   # Expected: { "status": "ok", "uptimeSeconds": ..., "secondsSinceLastTick": <30, "jobsScheduled": ... }
    ```
 
 ## Part 5 — Production Smoke Test

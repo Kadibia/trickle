@@ -53,6 +53,11 @@ export default function SettingsPage() {
   const [rotatingSecret, setRotatingSecret] = useState(false)
   const [rotateMsg, setRotateMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
+  const dripOutOfRange = (() => {
+    const n = parseInt(dripInput, 10)
+    return dripInput.trim() !== '' && (isNaN(n) || n < 1 || n > 1500)
+  })()
+
   useEffect(() => {
     fetch('/api/internal/settings')
       .then((r) => r.json())
@@ -213,12 +218,28 @@ if (sig !== expected) return res.status(401).send('Unauthorized')`}</pre>
             <label className="block text-sm font-medium text-zinc-300">
               Drip Rate <span className="ml-2 font-normal text-zinc-500">(registrations / minute)</span>
             </label>
-            <input type="number" min={1} max={1500} value={dripInput} onChange={(e) => setDripInput(e.target.value)}
-              className="w-36 rounded-lg border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white outline-none transition focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />
-            <p className="text-xs text-zinc-500">Default is 10/min. Max is 1,500/min. Changes take effect on the next delivery cycle.</p>
+            <input type="number" min={1} max={1500} value={dripInput}
+              onChange={(e) => setDripInput(e.target.value)}
+              onBlur={() => {
+                const n = parseInt(dripInput, 10)
+                if (isNaN(n)) return
+                const clamped = Math.min(1500, Math.max(1, n))
+                if (clamped !== n) setDripInput(String(clamped))
+              }}
+              className={cn(
+                'w-36 rounded-lg border bg-zinc-800/60 px-3.5 py-2.5 text-sm text-white outline-none transition focus:ring-1',
+                dripOutOfRange
+                  ? 'border-red-700 focus:border-red-500 focus:ring-red-500'
+                  : 'border-zinc-700 focus:border-blue-500 focus:ring-blue-500'
+              )} />
+            {dripOutOfRange ? (
+              <p className="text-xs text-red-400">Must be between 1 and 1,500. It will be clamped when you leave the field.</p>
+            ) : (
+              <p className="text-xs text-zinc-500">Default is 10/min. Max is 1,500/min. Changes take effect on the next delivery cycle.</p>
+            )}
           </div>
           {dripMsg && <FeedbackMsg ok={dripMsg.ok} text={dripMsg.text} />}
-          <button onClick={saveDripRate} disabled={dripSaving}
+          <button onClick={saveDripRate} disabled={dripSaving || dripOutOfRange}
             className="flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-500 disabled:opacity-50">
             {dripSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null} Save Rate
           </button>

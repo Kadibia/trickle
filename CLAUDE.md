@@ -13,7 +13,7 @@ Beyond free tier: developers purchase credit packs via Stripe or Paystack.
 ## Repo Structure
 Single repo, two deployable services:
 - / — Next.js 15 dashboard + API intake → Vercel
-- /worker — Node.js BullMQ queue processor → Railway
+- /worker — Node.js scheduler + webhook processor → Render (Web Service, free tier)
 
 ## Tech Stack
 - Framework: Next.js 15 (App Router, TypeScript strict mode)
@@ -22,12 +22,12 @@ Single repo, two deployable services:
 - ORM: Drizzle ORM (schema in /lib/db/schema.ts)
 - Auth: Better Auth (sessions in Neon, config in /lib/auth.ts)
 - Real-time: Server-Sent Events (SSE) via /app/api/internal/stream/route.ts
-- Queue Storage: Upstash Redis
-- Queue Processor: BullMQ in /worker
+- Queue Storage: Upstash Redis (REST API, no ioredis/BullMQ client)
+- Queue Processor: custom per-developer drip scheduler in /worker/src/scheduler.ts
 - Payments: Stripe (global) + Paystack (Africa)
 - Rate Limiting: @upstash/ratelimit sliding window in proxy.ts
 - Dashboard deploy: Vercel
-- Worker deploy: Railway
+- Worker deploy: Render (Web Service + health-check endpoint, kept alive via UptimeRobot)
 
 ## Architecture Rules
 - API intake route: /app/api/v1/queue/route.ts
@@ -36,16 +36,18 @@ Single repo, two deployable services:
 - Queue operations go through /lib/queue.ts — never call Upstash directly
 - Credit deduction is always a Drizzle INSERT into credits table
 - Never UPDATE a balance column — always aggregate the credits ledger
-- Webhook delivery and retry logic: /worker/src/processor.ts only
+- Webhook delivery and retry logic: /worker/src/processor.ts
+- Per-developer drip-rate pacing: /worker/src/scheduler.ts (drains a firehose intake queue into per-developer Redis buckets, delivers no faster than each developer's configured dripRate)
+- Routing rules (route payload to different webhooks by field match): /lib/routing.ts (dashboard) + /worker/src/routing.ts (worker) via resolveRoute()
 - SSE stream: /app/api/internal/stream/route.ts — pushes dashboard stats
 - Dashboard consumes SSE via useDashboardStream() hook in /hooks/
 - .env.local for dashboard secrets, /worker/.env for worker secrets
 - Never expose raw API keys or secrets in API responses
 
 ## Database Tables (Drizzle schema — /lib/db/schema.ts)
-- developers — id, email, passwordHash, apiKeyHash, webhookUrl, dripRate
+- developers — id, email, passwordHash, apiKeyHash, webhookUrl, dripRate, routingRules
 - credits — id, developerId, amount, source, reference, createdAt
-- queue_events — id, developerId, payload, status, attempts, deliveredAt
+- queue_events — id, developerId, payload, status, attempts, deliveredAt, routingRuleId
 - webhook_deliveries — id, eventId, attempt, statusCode, responseBody
 - Better Auth tables — auto-generated (sessions, accounts, verifications)
 
@@ -53,11 +55,12 @@ Single repo, two deployable services:
 - Credit balance = db.select(sum(credits.amount)).where(developerId)
 - Never store or read from a balance column — always aggregate
 - On signup: INSERT +500 credits (source='signup') — idempotent
-- Monthly cron (Railway): INSERT +10 credits for every active developer
+- Monthly cron (worker, via node-cron on Render): INSERT +10 credits for every active developer
 - Before queueing: check balance > 0, reject 402 if insufficient
 - Deduct 1 credit ONLY after confirmed 200 webhook delivery
 - Failed webhooks: retry 3x with exponential backoff (5s, 30s, 120s), no credit deducted
 - Drip rate default: 10 registrations/minute per developer account
+- Drip rate ceiling: 1,500/min (what the scheduler can actually sustain per tick) — enforced with live validation in Settings UI
 - Rate limit: 500 req/min per developer (sliding window, Upstash Redis)
 
 ## API Keys
@@ -82,7 +85,14 @@ Single repo, two deployable services:
 - INVALID_CONTENT_TYPE — 415
 - EMPTY_PAYLOAD — 422
 - NO_WEBHOOK — 422, no webhook URL configured
+- NOT_FOUND — 404, event doesn't exist or doesn't belong to this developer (replay routes)
+- INVALID_STATUS — 422, replay attempted on a non-failed event
 - QUEUE_ERROR — 500
+
+## Replay / Retry
+- External API: POST /api/v1/queue/:eventId/replay — auth via API key header
+- Dashboard: POST /api/internal/events/:eventId/replay — auth via session cookie (used by the Retry button on failed rows in /app/dashboard/page.tsx)
+- Both reset status to 'queued', attempts to 0, deliveredAt to null, then re-push to the intake queue with the developer's current webhookUrl (does not re-resolve routing rules against the original payload — redelivers to the default URL)
 
 ## Code Style
 - TypeScript strict mode — no 'any' types ever
@@ -102,7 +112,7 @@ Dashboard:
   npm run db:studio    — open Drizzle Studio (visual DB browser)
 
 Worker:
-  cd worker && npm run dev    — start BullMQ worker locally
+  cd worker && npm run dev    — start scheduler + processor locally
   cd worker && npm run build  — compile TypeScript
 
 ## Environment Variables
@@ -122,9 +132,10 @@ Worker (/worker/.env):
   UPSTASH_REDIS_TOKEN=
 
 ## Current Status
-- Phase: O — COMPLETE
-- All 15 phases (A–O) shipped
-- Dashboard → Vercel, Worker → Railway
+- Dashboard → Vercel, Worker → Render (migrated off Railway, trial expired)
+- Shipped and live-verified: routing rules, per-developer drip-rate scheduler, dashboard retry button for failed events
+- Known stale/dead code: `bullmq` and `ioredis` still listed in /worker/package.json but unused — scheduler talks to Upstash over REST directly. Safe to remove.
+- Two dashboard component stubs not yet built: `components/dashboard/credit-badge.tsx`, `components/analytics/delivery-stats.tsx` (both just `// TODO`, unreferenced elsewhere)
 - See DEPLOY.md for deployment instructions
 
 ## Credit Packs
